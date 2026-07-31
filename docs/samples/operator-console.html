@@ -1,65 +1,15 @@
-<html><head><meta charset="utf-8"><title>cloud-itonami-isic-2720 · battery cell/pack plant</title><style>
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ok { color: #137a3f; }
-body { font-family: system-ui,-apple-system,sans-serif; margin: 0; color: #1a1a1a; background: #fafafa; }
-header.bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e5e5; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
-h2 { margin-top: 0; font-size: 15px; }
-.warn { color: #b25c00; background: #fff8e1; padding: 2px 6px; border-radius: 4px; }
-main { max-width: 980px; margin: 24px auto; padding: 0 20px; }
-header.bar h1 { font-size: 18px; margin: 0; font-weight: 600; }
-.muted { color: #888; font-size: 13px; }
-.critical { color: #fff; background: #b3261e; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
-.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-.err { color: #b3261e; background: #fbe9e7; padding: 2px 6px; border-radius: 4px; }
-th { font-weight: 600; color: #555; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-header.bar .badge { margin-left: auto; font-size: 12px; color: #666; }
-code { font-size: 12px; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
-</style></head><body>
-<header class="bar">
-  <h1>Battery cell/pack plant (ISIC 2720) — Operator Console</h1>
-  <span class="badge">read-only sample · governor-gated · never dispatches hardware</span>
-</header>
-<main>
-  <section class="card">
-    <h2>Cell batches</h2>
-    <p class="muted">Demo snapshot — live data from <code>cellworks.store</code> / <code>clojure -M:dev:run</code>.</p>
-    <table>
-      <thead><tr><th>Batch</th><th>Name</th><th>Scheme</th><th>Crush force (UN38.3 T6)</th><th>Resistance dev.</th><th>End-of-line</th><th>Status</th></tr></thead>
-      <tbody>
-        <tr><td>batch-1</td><td>Meridian 21700 Cell Batch CB-4401</td><td>UN</td><td class="ok">7619 N &lt; 13000 N ceiling</td><td class="ok">2.0 &isin; [-5.0,5.0] mOhm</td><td class="ok">resolved</td><td class="ok">ready</td></tr>
-        <tr><td>batch-2</td><td>Atlas 21700 Cell Batch CB-1180</td><td>ATL</td><td class="ok">in-spec</td><td class="ok">in-spec</td><td class="ok">—</td><td><span class="err">no spec-basis</span></td></tr>
-        <tr><td>batch-3</td><td>田中セル電池バッチ CB-2215</td><td>CHN</td><td class="ok">in-spec</td><td><span class="err">8.5 mOhm out of range</span></td><td class="ok">—</td><td><span class="warn">HARD hold on shipment</span></td></tr>
-        <tr><td>batch-4</td><td>佐藤セル電池バッチ CB-3330</td><td>USA</td><td class="ok">in-spec</td><td class="ok">in-spec</td><td><span class="err">unresolved</span></td><td><span class="critical">end-of-line hold</span></td></tr>
-        <tr><td>batch-5</td><td>鈴木セル電池バッチ CB-1118</td><td>IEC</td><td><span class="err">28571 N &gt; 13000 N ceiling</span></td><td class="ok">in-spec</td><td class="ok">resolved</td><td><span class="warn">robotics-sim out-of-tolerance</span></td></tr>
-      </tbody>
-    </table>
-  </section>
-  <section class="card">
-    <h2>Action gate (Cell-Safety Governor)</h2>
-    <p class="muted">HARD holds cannot be overridden. Actuation always escalates to a human quality engineer.</p>
-    <table>
-      <thead><tr><th>Op</th><th>Stake</th><th>Gate</th></tr></thead>
-      <tbody>
-        <tr><td><code>:cell-batch/intake</code></td><td>none</td><td><span class="ok">phase-3 auto when clean</span></td></tr>
-        <tr><td><code>:cell-safety-rules/verify</code></td><td>none</td><td><span class="warn">human approval · no fabricated safety-certification rules</span></td></tr>
-        <tr><td><code>:end-of-line-quality/screen</code></td><td>none</td><td><span class="critical">HARD hold if unresolved defect</span></td></tr>
-        <tr><td><code>:robotics/simulate-crush-test</code></td><td>low</td><td><span class="warn">human approval · real physics-2d press-platen/cell UN 38.3 T6 crush mission</span></td></tr>
-        <tr><td><code>:actuation/ship-cell-batch</code></td><td class="critical">safety-critical</td><td><span class="warn">always human · resistance + robotics + evidence checks</span></td></tr>
-        <tr><td><code>:actuation/issue-safety-certificate</code></td><td class="critical">safety-critical</td><td><span class="warn">always human · end-of-line + double-issue guard</span></td></tr>
-      </tbody>
-    </table>
-  </section>
-  <section class="card">
-    <h2>Social hand-off</h2>
-    <p class="muted">Audit package for downstream-assembler quality auditors — <code>cellworks.export/audit-package</code> and <code>package-&gt;csv-bundle</code> (cell-batches / ledger / shipments / safety-certificates CSV).</p>
-    <table>
-      <thead><tr><th>Artifact</th><th>Kind</th><th>Note</th></tr></thead>
-      <tbody>
-        <tr><td>UN-CBS-000000</td><td>cell-batch-shipment-draft</td><td>unsigned · plant signs offline</td></tr>
-        <tr><td>UN-BSTR-000000</td><td>safety-certificate-draft</td><td>unsigned · downstream-assembler intake is plant act</td></tr>
-      </tbody>
-    </table>
-  </section>
-</main>
-</body></html>
+<html><head><meta charset="utf-8"><title>cloud-itonami-isic-2720</title><style>body{font:14px/1.5 sans-serif;margin:0;color:#1a1a1a;background:#f5f5f5}.bar{background:#0a2a1a;color:#fff;padding:1.2rem 2rem}.bar h1{margin:0;font-size:1.15rem}main{max-width:980px;margin:1.5rem auto;padding:0 1rem}.card{background:#fff;border-radius:8px;padding:1.2rem 1.4rem;margin-bottom:1.2rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.muted{color:#777;font-size:.82rem}table{border-collapse:collapse;width:100%;font-size:.85rem}th,td{text-align:left;padding:.42rem .5rem;border-bottom:1px solid #eee}th{font-weight:600;color:#555}.ok{color:#0a7d33}.warn{color:#9a6700}.critical{color:#b41010;font-weight:600}code{background:#f0f0f0;padding:.1rem .3rem;border-radius:3px;font-size:.8rem}</style></head><body><header class="bar"><h1>Battery cell manufacturing ops (ISIC 2720) — <code>cellworks</code></h1></header><main><section class="card"><h2>Production batches</h2><p class="muted">Demo from <code>cellworks.store</code> via <code>cellworks.render-html</code>. No invented data.</p><table><thead><tr><th>Batch</th><th>Chemistry</th><th>Last op</th></tr></thead><tbody>        <tr><td>batch-1</td><td>LiFePO4</td><td><span class="critical">HARD hold: robotics-simulation-missing</span></td></tr>
+        <tr><td>batch-2</td><td>-</td><td><span class="muted">no activity</span></td></tr>
+        <tr><td>batch-3</td><td>-</td><td><span class="muted">no activity</span></td></tr>
+        <tr><td>batch-4</td><td>-</td><td><span class="muted">no activity</span></td></tr>
+        <tr><td>batch-5</td><td>-</td><td><span class="muted">no activity</span></td></tr>
+        <tr><td>batch-999</td><td>LiCoO2</td><td><span class="ok">committed</span></td></tr></tbody></table></section><section class="card"><h2>Action gate</h2><table><thead><tr><th>Op</th><th>Gate</th></tr></thead><tbody>        <tr><td><code>:cell-batch/intake</code></td><td><span class="ok">auto-commit when clean</span></td></tr>
+        <tr><td><code>:cell-safety-rules/verify</code></td><td><span class="warn">ALWAYS human approval; evidence required before shipping</span></td></tr>
+        <tr><td><code>:end-of-line-quality/screen</code></td><td><span class="warn">ALWAYS human approval</span></td></tr>
+        <tr><td><code>:robotics/simulate-crush-test</code></td><td><span class="warn">ALWAYS human approval (UN 38.3 T6 crush test)</span></td></tr>
+        <tr><td><code>:actuation/ship-cell-batch</code></td><td><span class="warn">ALWAYS human approval; safety-verify prerequisite</span></td></tr></tbody></table></section><section class="card"><h2>Audit ledger</h2><table><thead><tr><th>Fact</th><th>Op</th><th>Subject</th><th>Basis</th></tr></thead><tbody>        <tr><td>committed</td><td><code>intake</code></td><td>batch-1</td><td>id, chemistry</td></tr>
+        <tr><td>committed</td><td><code>verify</code></td><td>batch-1</td><td>UN Manual of Tests and Criteria, Part III, Sub-section 38.3 ("UN 38.3") -- mandatory test regime for the international transport of lithium metal/lithium-ion cells and batteries by air/sea/road, https://www.prba.org/wp-content/uploads/Sub-section-38.3-UN-Manual-6th-Revised-Edition-with-corrections.pdf</td></tr>
+        <tr><td>committed</td><td><code>screen</code></td><td>batch-1</td><td>end-of-line-quality-check</td></tr>
+        <tr><td>governor-hold</td><td><code>ship-cell-batch</code></td><td>batch-1</td><td>robotics-simulation-missing</td></tr>
+        <tr><td>governor-hold</td><td><code>ship-cell-batch</code></td><td>batch-1</td><td>robotics-simulation-missing</td></tr>
+        <tr><td>committed</td><td><code>intake</code></td><td>batch-999</td><td>id, chemistry</td></tr></tbody></table></section></main></body></html>
