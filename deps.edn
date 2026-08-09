@@ -6,7 +6,18 @@
  ;; repo is standalone (forkable outside the workspace); the :local/root
  ;; paths only resolve inside the monorepo checkout — a standalone fork
  ;; should override them with git coordinates.
- :deps {io.github.kotoba-lang/langgraph
+ :deps {;; Workspace BASE design system (デジタル庁デザインシステム / DADS).
+        ;; `jp-go-dds.skin/dds+skin` is the stylesheet
+        ;; `cellworks.render-html` inlines into the operator console --
+        ;; the same small class vocabulary (.ok/.warn/.critical/.muted/
+        ;; .card/.badge/.bar/.num) every sibling console uses, so no new
+        ;; token vocabulary is invented here. Taken as a pinned git
+        ;; coordinate (not :local/root) so this repo stays forkable
+        ;; standalone, exactly as cloud-itonami-isic-9522 carries it.
+        io.github.kotoba-lang/jp-go-digital-design-system
+        {:git/url "https://github.com/kotoba-lang/jp-go-digital-design-system"
+         :git/sha "83db99546eabc53613ae826ea41d1533a3c574af"}
+        io.github.kotoba-lang/langgraph
         {:local/root "../../kotoba-lang/langgraph"}
         io.github.kotoba-lang/robotics
         {:local/root "../../kotoba-lang/robotics"}
