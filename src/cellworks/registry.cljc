@@ -34,7 +34,7 @@
   is `cellworks.operation`'s `:actuation/ship-cell-batch`/`:actuation/
   issue-safety-certificate`, always human-gated -- see README
   `Actuation`)."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- unsigned-certificate
   "Every certificate this actor produces is UNSIGNED -- signature is
@@ -90,7 +90,7 @@
     (throw (ex-info "cell-batch-shipment: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "cell-batch-shipment: sequence must be >= 0" {})))
-  (let [shipment-number (str (str/upper-case jurisdiction) "-CBS-" (zero-pad sequence 6))
+  (let [shipment-number (str (str/upper jurisdiction) "-CBS-" (zero-pad sequence 6))
         record {"record_id" shipment-number
                 "kind" "cell-batch-shipment-draft"
                 "cell_batch_id" cell-batch-id
@@ -116,7 +116,7 @@
     (throw (ex-info "safety-certificate: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "safety-certificate: sequence must be >= 0" {})))
-  (let [certificate-number (str (str/upper-case jurisdiction) "-BSTR-" (zero-pad sequence 6))
+  (let [certificate-number (str (str/upper jurisdiction) "-BSTR-" (zero-pad sequence 6))
         record {"record_id" certificate-number
                 "kind" "safety-certificate-draft"
                 "cell_batch_id" cell-batch-id

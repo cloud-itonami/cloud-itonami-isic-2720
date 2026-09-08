@@ -1,6 +1,6 @@
 (ns cellworks.export-test
   "Audit-package export contract -- social/regulatory hand-off shape."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]
             [langgraph.graph :as g]
             [cellworks.export :as export]
