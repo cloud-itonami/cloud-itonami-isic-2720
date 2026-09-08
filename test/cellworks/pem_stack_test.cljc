@@ -1,7 +1,7 @@
 (ns cellworks.pem-stack-test
   "Focused tests for the PEM stack assembly-and-test cell decision contract
   (activity -> decision -> effect -> audit). Pure; deterministic; stdlib only."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is run-tests]]
             [cellworks.pem-stack :as pem]))
 
