@@ -1,5 +1,5 @@
 (ns cellworks.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a clean cell-batch through
+  "Demo driver -- `kbb -M:dev:run`. Walks a clean cell-batch through
   intake -> (an evidence-incomplete shipment attempt) -> cell-safety-
   rules verification -> end-of-line quality screening -> robot UN 38.3
   T6 crush-test mission -> cell-batch-shipment proposal (always
