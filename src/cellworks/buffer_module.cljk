@@ -1,0 +1,258 @@
+(ns cellworks.buffer-module
+  "buffer_module.cljk — buffer accumulator module integration-and-EOL decision
+  contract (:buffer-module-integration-and-eol manufacturing cell,
+  scripts/hermes-magnesium-systems-bots/system-scope.edn on
+  com-junkawasaki origin/main).
+
+  The buffer accumulator module is THIS actor's (ISIC 2720, manufacture of
+  batteries and accumulators) own product contribution to the
+  magnesium-hydrogen-PEMFC electric-drive system: a rechargeable buffer module
+  that levels the PEMFC stack's output for the electric powertrain. Cell-batch
+  manufacture, UN 38.3 T6 crush-test verification, safety-certification
+  evidence and end-of-line cell screening are THIS actor's existing gates
+  (cellworks.registry / cellworks.robotics / cellworks.governor); THIS module
+  consumes their OUTPUT — only safety-certified cell-batches may be integrated
+  into a buffer module — and pairs the module with a tested PEM stack and an
+  MgH2 cartridge for system-level integration downstream.
+
+  First-generation boundary respected: MgH2 synthesis and MEA manufacture stay
+  OUTSOURCED; the cartridge and PEM stack are PAIRED here by id only — this
+  module never plans their fabrication, synthesis or internal service.
+
+  Hazard boundaries encoded (high voltage, hydrogen-adjacent enclosure):
+    - HV lockout/tagout, calibrated H2 detector and verified insulation
+      resistance are required interlocks before any integration plan
+    - bus connect (HV arc/short) and module release (sale/shipping
+      commitment) are hazardous steps requiring explicit human approval —
+      absence defers, never approves
+    - no threshold is invented: measured module OCV, measured internal-
+      resistance deviation and measured enclosure leak rate are required
+      inputs; missing price / lead-time / utility / safety / compliance
+      values are recorded as :unmeasured
+    - the bot may design and simulate; a module-assembly-rig command is
+      refused unconditionally (:audit/bot-commanded-equipment is always false)
+
+  Pure fns; deterministic; keyword-keyed records; stdlib only."
+  (:require [clojure.set :as set]
+            [kotoba.lang.text :as str]))
+
+;; ── constants ──────────────────────────────────────────────────────────────
+
+(def ^:private required-interlocks
+  #{:hv-lockout-tagout :h2-detector-calibrated :insulation-resistance-verified})
+(def ^:private required-hazardous-steps #{:connect-hv-bus :release-module})
+(def ^:private recognized-conditions #{"new" "used" "refurbished" "unknown"})
+(def ^:private recognized-equipment-classes
+  #{:accumulator-module-eol-test :pack-assembly-and-handling})
+
+;; ── helpers ────────────────────────────────────────────────────────────────
+
+(defn- present? [x]
+  (cond (string? x) (not (str/blank? x))
+        (nil? x) false
+        :else true))
+
+(defn- audit-record
+  "The audit tail every decision returns: what was decided, which gates were
+  checked, and the explicit no-physical-command attestation."
+  [activity-id decision refusal gates-checked effect]
+  {:audit/activity-id activity-id
+   :audit/decision decision
+   :audit/refusal refusal
+   :audit/gates-checked gates-checked
+   :audit/effect effect
+   :audit/bot-commanded-equipment false})
+
+(defn- refuse [activity-id refusal gates]
+  {:decision :refused
+   :effect {:effect/kind :none}
+   :audit (audit-record activity-id :refused refusal gates {:effect/kind :none})})
+
+;; ── activity 1: buffer module integration-and-EOL plan (hazardous) ─────────
+
+(defn plan-module-integration-and-eol
+  "One buffer-module integration-and-EOL activity.
+
+  `req` keys (all measured values must be supplied by the caller; this function
+  invents none — no pass threshold, capacity or yield is assumed here):
+    :activity/id              string
+    :module/id                string — the buffer module being integrated
+    :cell-batches             vector of ≥1 {:batch-id string
+                                :safety-certified? boolean} — only batches that
+                                passed THIS actor's own certification gate
+    :paired-stack-id          string — the PEM stack this module levels output
+                                for (paired by id; fabrication out of boundary)
+    :paired-cartridge-id      string — the MgH2 cartridge id (paired by id;
+                                synthesis and cartridge internals out of boundary)
+    :measured-module-ocv-v    number — measured on the assembled module
+    :measured-ir-deviation    {:value number :unit string} — module IR deviation
+    :measured-enclosure-leak  {:value number :unit string} — measured enclosure
+                                leak rate (hydrogen-adjacent)
+    :interlocks               collection of interlock keywords (HV
+                              lockout/tagout, calibrated H2 detector, verified
+                              insulation resistance)
+    :witness-robot-dids       vector of ≥2 robot DIDs (witness quorum per record)
+    :human-approval           {:approver-did string :approved-at string
+                               :scope #{:connect-hv-bus :release-module} — must
+                               cover both hazardous steps}
+    :requested-effect         :simulate-integration-plan (the only admissible
+                              kind) or :command-assembly-rig (refused
+                              unconditionally)
+
+  Returns {:decision :approved|:refused :effect {...} :audit {...}}."
+  [req]
+  (let [activity-id (get req :activity/id "")
+        gates (atom [])
+        note (fn [g] (swap! gates conj g))
+        cell-batches (get req :cell-batches)
+        batches-ok?
+        (and (vector? cell-batches)
+             (pos? (count cell-batches))
+             (every? (fn [b]
+                       (and (map? b)
+                            (present? (get b :batch-id))
+                            (true? (get b :safety-certified?))))
+                     cell-batches))
+        measured-ok?
+        (fn [k] (and (map? (get req k))
+                     (number? (get-in req [k :value]))
+                     (present? (get-in req [k :unit]))))
+        ;; ordered checks; first failure refuses
+        refusal
+        (cond
+          (not (present? activity-id))
+          (do (note :activity-id-present)
+              "activity-id: a buffer-module integration activity needs an :activity/id")
+
+          (not (and (present? (get req :module/id)) (string? (get req :module/id))))
+          (do (note :module-id-present)
+              "module-id: the activity must name the :module/id being integrated")
+
+          (not batches-ok?)
+          (do (note :cell-batches-safety-certified)
+              "boundary: every integrated cell-batch must carry this actor's own safety certification (:batch-id + :safety-certified?); an uncertified or self-declared batch is never integrated")
+
+          (not (present? (get req :paired-stack-id)))
+          (do (note :paired-stack-id-present)
+              "boundary: :paired-stack-id is required — the buffer module is planned only against a PEM stack it actually levels output for (paired by id; stack fabrication stays in the stack cell)")
+
+          (not (present? (get req :paired-cartridge-id)))
+          (do (note :paired-cartridge-id-present)
+              "boundary: :paired-cartridge-id is required — the buffer module is planned only against an MgH2 cartridge pairing (paired by id; synthesis and cartridge internals stay out of this module's boundary)")
+
+          (not (number? (get req :measured-module-ocv-v)))
+          (do (note :measured-ocv-required)
+              "unmeasured: :measured-module-ocv-v is required and must be measured on the assembled module")
+
+          (not (measured-ok? :measured-ir-deviation))
+          (do (note :measured-ir-required)
+              "unmeasured: :measured-ir-deviation {value unit} is required from the EOL bench; this module never substitutes a datasheet constant or an assumed pass threshold")
+
+          (not (measured-ok? :measured-enclosure-leak))
+          (do (note :measured-enclosure-leak-required)
+              "unmeasured: :measured-enclosure-leak {value unit} is required — the module shares an enclosure neighborhood with hydrogen-bearing hardware; the leak reading is never assumed")
+
+          (not (set/subset? required-interlocks
+                            (set (map keyword (get req :interlocks)))))
+          (do (note :interlocks-complete)
+              (str "safety: interlocks incomplete; required "
+                   (pr-str (sort required-interlocks))
+                   " got " (pr-str (sort (set (map keyword (get req :interlocks)))))))
+
+          (not (>= (count (remove str/blank? (map str (get req :witness-robot-dids))))
+                   2))
+          (do (note :witness-quorum)
+              "witness-quorum: the integration record needs ≥ 2 robot witness signers")
+
+          (= :command-assembly-rig (get req :requested-effect))
+          (do (note :no-physical-command)
+              "no-physical-command: the bot may design and simulate but may not command physical equipment; only :simulate-integration-plan is admissible")
+
+          (not (and (map? (get req :human-approval))
+                    (present? (get-in req [:human-approval :approver-did]))
+                    (present? (get-in req [:human-approval :approved-at]))
+                    (set/subset? required-hazardous-steps
+                                 (set (map keyword (get-in req [:human-approval :scope]))))))
+          (do (note :human-approval-required)
+              (str "human-approval: HV bus connect and module release are hazardous/sale commitments; a named human approver with "
+                   (pr-str (sort required-hazardous-steps))
+                   " scope must be recorded — absence defers, never approves"))
+
+          :else nil)]
+    (if refusal
+      (refuse activity-id refusal @gates)
+      (let [effect {:effect/kind :simulate-integration-plan-only
+                    :effect/machine-command false
+                    :effect/plan {:module/id (:module/id req)
+                                  :cell-batches (vec (:cell-batches req))
+                                  :paired-stack-id (:paired-stack-id req)
+                                  :paired-cartridge-id (:paired-cartridge-id req)
+                                  :measured-module-ocv-v (:measured-module-ocv-v req)
+                                  :measured-ir-deviation (:measured-ir-deviation req)
+                                  :measured-enclosure-leak (:measured-enclosure-leak req)
+                                  :interlocks (sort (set (map keyword (:interlocks req))))
+                                  :witness-robot-dids (vec (:witness-robot-dids req))
+                                  :mgh2-synthesized-in-house false
+                                  :mea-manufactured-in-house false}}]
+        {:decision :approved
+         :effect effect
+         :audit (audit-record activity-id :approved "" (conj @gates :human-approval-approved :no-physical-command) effect)}))))
+
+;; ── activity 2: equipment-offer screening (procurement — always deferred) ──
+
+(defn screen-equipment-offer
+  "Screen one equipment offer for the buffer-module integration-and-EOL cell
+  (e.g. :accumulator-module-eol-test or :pack-assembly-and-handling equipment
+  class). Procurement is a financial commitment: the decision is ALWAYS
+  :deferred to a human approver; this fn only assembles the auditable evidence
+  record. Condition must be distinguished as 'new', 'used', 'refurbished' or
+  'unknown'. Missing price / lead-time / utility / safety / compliance values
+  are recorded as :unmeasured — never invented."
+  [offer]
+  (let [activity-id (get offer :activity/id "")
+        gates (atom [])
+        condition (get offer :condition)
+        source-url (get offer :source-url)
+        equipment-class (some-> (get offer :equipment-class) keyword)]
+    (swap! gates conj :condition-distinguished :source-recorded)
+    (cond
+      (not (present? activity-id))
+      (refuse activity-id "activity-id: an equipment screening needs an :activity/id" @gates)
+
+      (not (contains? recognized-equipment-classes equipment-class))
+      (refuse activity-id
+              (str "equipment-class: must be one of "
+                   (pr-str (sort (map name recognized-equipment-classes)))
+                   "; got " (pr-str (get offer :equipment-class)))
+              @gates)
+
+      (not (contains? recognized-conditions condition))
+      (refuse activity-id
+              (str "condition: must be distinguished as one of "
+                   (pr-str (sort recognized-conditions)) "; got " (pr-str condition))
+              @gates)
+
+      (not (present? source-url))
+      (refuse activity-id "source: an offer needs a first-party :source-url" @gates)
+
+      :else
+      (let [effect {:effect/kind :deferred-human-approval
+                    :effect/machine-command false
+                    :effect/screening
+                    {:manufacturer (get offer :manufacturer)
+                     :model (get offer :model)
+                     :equipment-class equipment-class
+                     :condition condition
+                     :seller (get offer :seller)
+                     :source-url source-url
+                     :observed-at (get offer :observed-at)
+                     :unmeasured (dissoc (select-keys offer [:price :currency :lead-time
+                                                             :utility :safety :compliance])
+                                         nil)
+                     :unmeasured-fields [:price :currency :lead-time :utility :safety :compliance]}}]
+        {:decision :deferred
+         :effect effect
+         :audit (audit-record activity-id :deferred
+                              "procurement is a human decision; screening evidence assembled only"
+                              (conj @gates :human-approval-required :no-financial-commitment)
+                              effect)}))))
