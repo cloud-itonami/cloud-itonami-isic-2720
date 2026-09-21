@@ -1,0 +1,165 @@
+(ns cellworks.buffer-module-test
+  "Focused tests for the buffer-module integration-and-EOL decision contract
+  (activity -> decision -> effect -> audit). Pure; deterministic; stdlib only."
+  (:require [kotoba.lang.text :as str]
+            [clojure.test :refer [deftest is run-tests]]
+            [cellworks.buffer-module :as bm]))
+
+(def ^:private valid-req
+  {:activity/id "act-mod-0001"
+   :module/id "bmod-2026-0001"
+   :cell-batches [{:batch-id "batch-2026-0142" :safety-certified? true}]
+   :paired-stack-id "stack-2026-0001"
+   :paired-cartridge-id "cartridge-2026-0007"
+   :measured-module-ocv-v 51.8
+   :measured-ir-deviation {:value 1.4 :unit "pct"}
+   :measured-enclosure-leak {:value 0.5 :unit "sccm"}
+   :interlocks [:hv-lockout-tagout :h2-detector-calibrated
+                :insulation-resistance-verified]
+   :witness-robot-dids ["did:web:etzhayyim.com:itonami:otete"
+                        "did:web:etzhayyim.com:itonami:mimi"]
+   :human-approval {:approver-did "did:web:etzhayyim.com:person:owner"
+                    :approved-at "2026-09-21T00:00:00Z"
+                    :scope #{:connect-hv-bus :release-module}}
+   :requested-effect :simulate-integration-plan})
+
+(def ^:private valid-offer
+  {:activity/id "act-mod-eq-0001"
+   :equipment-class :accumulator-module-eol-test
+   :manufacturer "Example EOL Bench Instruments"
+   :model "EOLB-200"
+   :condition "used"
+   :seller "Example owner-operated dealer"
+   :source-url "https://example-eol-benches.example/inventory/eolb-200"
+   :observed-at "2026-09-21T00:00:00Z"})
+
+;; ── plan-module-integration-and-eol ────────────────────────────────────────
+
+(deftest test-happy-path-approves-simulate-only
+  (let [r (bm/plan-module-integration-and-eol valid-req)]
+    (is (= :approved (:decision r)))
+    (is (= :simulate-integration-plan-only (get-in r [:effect :effect/kind])))
+    (is (false? (get-in r [:effect :effect/machine-command])))
+    (is (false? (get-in r [:effect :effect/plan :mgh2-synthesized-in-house])))
+    (is (false? (get-in r [:effect :effect/plan :mea-manufactured-in-house])))
+    (is (false? (get-in r [:audit :audit/bot-commanded-equipment])))
+    (is (contains? (set (:audit/gates-checked (:audit r))) :human-approval-approved))))
+
+(deftest test-rig-command-refused-unconditionally
+  (let [r (bm/plan-module-integration-and-eol (assoc valid-req :requested-effect :command-assembly-rig))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "no-physical-command"))))
+
+(deftest test-uncertified-cell-batch-refused
+  (let [r (bm/plan-module-integration-and-eol
+           (assoc-in valid-req [:cell-batches 0 :safety-certified?] false))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "safety certification"))))
+
+(deftest test-missing-cell-batches-refused
+  (let [r (bm/plan-module-integration-and-eol (dissoc valid-req :cell-batches))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "safety certification"))))
+
+(deftest test-missing-pairings-refused
+  (let [r1 (bm/plan-module-integration-and-eol (dissoc valid-req :paired-stack-id))]
+    (is (= :refused (:decision r1)))
+    (is (str/includes? (:audit/refusal (:audit r1)) "paired-stack-id")))
+  (let [r2 (bm/plan-module-integration-and-eol (dissoc valid-req :paired-cartridge-id))]
+    (is (= :refused (:decision r2)))
+    (is (str/includes? (:audit/refusal (:audit r2)) "paired-cartridge-id"))))
+
+(deftest test-missing-measurements-refused-not-invented
+  (doseq [k [:measured-module-ocv-v :measured-ir-deviation :measured-enclosure-leak]]
+    (let [r (bm/plan-module-integration-and-eol (dissoc valid-req k))]
+      (is (= :refused (:decision r)) (str k))
+      (is (str/includes? (:audit/refusal (:audit r)) "unmeasured") (str k))))
+  (let [r (bm/plan-module-integration-and-eol (dissoc valid-req :measured-ir-deviation))]
+    (is (str/includes? (:audit/refusal (:audit r)) "never substitutes")
+        "IR refusal must state the module never substitutes a datasheet constant")))
+
+(deftest test-missing-interlocks-refused-with-required-list
+  (let [r (bm/plan-module-integration-and-eol
+           (assoc valid-req :interlocks [:hv-lockout-tagout]))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "h2-detector-calibrated")))
+  (let [r (bm/plan-module-integration-and-eol
+           (assoc valid-req :interlocks [:h2-detector-calibrated
+                                         :insulation-resistance-verified]))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "hv-lockout-tagout"))))
+
+(deftest test-witness-quorum-refused
+  (let [r (bm/plan-module-integration-and-eol (assoc valid-req :witness-robot-dids ["did:one"]))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "witness-quorum"))))
+
+(deftest test-missing-human-approval-defers-never-approves
+  (let [r (bm/plan-module-integration-and-eol (dissoc valid-req :human-approval))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "human-approval")))
+  (let [r (bm/plan-module-integration-and-eol
+           (assoc-in valid-req [:human-approval :scope] #{:connect-hv-bus}))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "human-approval"))))
+
+(deftest test-blank-activity-id-refused
+  (let [r (bm/plan-module-integration-and-eol (assoc valid-req :activity/id ""))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "activity-id"))))
+
+(deftest test-approved-plan-preserves-measured-values-only
+  (let [r (bm/plan-module-integration-and-eol valid-req)
+        plan (get-in r [:effect :effect/plan])]
+    (is (= 51.8 (:measured-module-ocv-v plan)))
+    (is (= {:value 1.4 :unit "pct"} (:measured-ir-deviation plan)))
+    (is (= {:value 0.5 :unit "sccm"} (:measured-enclosure-leak plan)))
+    (is (= "stack-2026-0001" (:paired-stack-id plan)))
+    (is (= "cartridge-2026-0007" (:paired-cartridge-id plan)))
+    (is (nil? (:pass-threshold plan)))))
+
+;; ── screen-equipment-offer ─────────────────────────────────────────────────
+
+(deftest test-offer-always-deferred-to-human
+  (let [r (bm/screen-equipment-offer valid-offer)]
+    (is (= :deferred (:decision r)))
+    (is (= :deferred-human-approval (get-in r [:effect :effect/kind])))
+    (is (= "used" (get-in r [:effect :effect/screening :condition])))
+    (is (false? (get-in r [:audit :audit/bot-commanded-equipment])))
+    (is (contains? (set (:audit/gates-checked (:audit r))) :no-financial-commitment))))
+
+(deftest test-offer-condition-must-be-distinguished
+  (let [r (bm/screen-equipment-offer (assoc valid-offer :condition "bargain"))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "condition"))))
+
+(deftest test-offer-equipment-class-restricted
+  (let [r (bm/screen-equipment-offer (assoc valid-offer :equipment-class :injection-molding))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "equipment-class"))))
+
+(deftest test-offer-requires-first-party-source
+  (let [r (bm/screen-equipment-offer (dissoc valid-offer :source-url))]
+    (is (= :refused (:decision r)))
+    (is (str/includes? (:audit/refusal (:audit r)) "first-party"))))
+
+(deftest test-offer-records-missing-values-as-unmeasured
+  (let [r (bm/screen-equipment-offer valid-offer)
+        screening (get-in r [:effect :effect/screening])]
+    (is (empty? (:unmeasured screening)))
+    (is (= [:price :currency :lead-time :utility :safety :compliance]
+           (:unmeasured-fields screening)))))
+
+(deftest test-offer-with-price-keeps-it-unmeasured-tagged
+  (let [r (bm/screen-equipment-offer (assoc valid-offer :price 14000 :currency "JPY"))
+        screening (get-in r [:effect :effect/screening])]
+    (is (= 14000 (get-in screening [:unmeasured :price])))
+    (is (= "JPY" (get-in screening [:unmeasured :currency])))
+    (is (= :deferred (:decision r)))))
+
+;; ── runner ─────────────────────────────────────────────────────────────────
+
+(defn -main [& _]
+  (let [{:keys [fail error]} (run-tests 'cellworks.buffer-module-test)]
+    #?(:clj (System/exit (if (zero? (+ fail error)) 0 1))
+       :cljs nil)))
