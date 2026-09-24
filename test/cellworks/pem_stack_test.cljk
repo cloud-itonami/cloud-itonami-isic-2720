@@ -2,7 +2,7 @@
   "Focused tests for the PEM stack assembly-and-test cell decision contract
   (activity -> decision -> effect -> audit). Pure; deterministic; stdlib only."
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is run-tests]]
+            [kotoba.test :refer [deftest is run-tests]]
             [cellworks.pem-stack :as pem]))
 
 (def ^:private valid-req

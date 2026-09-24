@@ -1,5 +1,5 @@
 (ns cellworks.facts-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [cellworks.facts :as facts]))
 
 (deftest un-has-a-spec-basis

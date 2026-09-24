@@ -1,5 +1,5 @@
 (ns cellworks.registry-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [cellworks.registry :as r]))
 
 ;; ----------------------------- cell-batch-resistance-out-of-range? -----------------------------
