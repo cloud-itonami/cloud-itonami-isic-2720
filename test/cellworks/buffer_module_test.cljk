@@ -2,7 +2,7 @@
   "Focused tests for the buffer-module integration-and-EOL decision contract
   (activity -> decision -> effect -> audit). Pure; deterministic; stdlib only."
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is run-tests]]
+            [kotoba.test :refer [deftest is run-tests]]
             [cellworks.buffer-module :as bm]))
 
 (def ^:private valid-req

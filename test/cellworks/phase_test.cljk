@@ -2,7 +2,7 @@
   "The phase table as executable tests. The invariant this repo cannot
   regress on: `:actuation/ship-cell-batch`/`:actuation/issue-safety-
   certificate` must NEVER be a member of any phase's `:auto` set."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [cellworks.phase :as phase]))
 
 (deftest ship-cell-batch-never-auto-at-any-phase

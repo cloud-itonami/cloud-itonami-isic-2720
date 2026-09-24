@@ -3,7 +3,7 @@
   measures (every run numeric, count = expected), that the numbers come
   from the simulation (the derived boundary really straddles the UN 38.3
   T6 ceiling), and that a changed solver would show."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [cellworks.physics-probe :as probe]
             [cellworks.robotics :as robotics]))
 
