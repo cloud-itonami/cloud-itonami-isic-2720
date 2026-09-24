@@ -1,0 +1,40 @@
+(ns cellworks.physics-probe-test
+  "The probe is the bot's only source of \"measured\"; these pin that it
+  measures (every run numeric, count = expected), that the numbers come
+  from the simulation (the derived boundary really straddles the UN 38.3
+  T6 ceiling), and that a changed solver would show."
+  (:require [clojure.test :refer [deftest is testing]]
+            [cellworks.physics-probe :as probe]
+            [cellworks.robotics :as robotics]))
+
+(deftest probe-measures-every-run
+  (let [p (probe/probe)]
+    (is (= "itonami.physical-ai.probe.v1" (:physics-probe/schema p)))
+    (is (pos? (:count p)))
+    (is (= (:count p) (:expected p) (count (:runs p))))
+    (testing "every run carries a numeric force and tick count from the trajectory"
+      (doseq [r (:runs p)]
+        (is (number? (get-in r [:quantities :sim-peak-crush-force-n])))
+        (is (pos? (get-in r [:quantities :ticks])))))))
+
+(deftest force-rises-with-platen-mass-across-the-sweep
+  (let [forces (map #(get-in % [:quantities :sim-peak-crush-force-n]) (:runs (probe/probe)))]
+    (is (apply < forces))))
+
+(deftest seeded-fixtures-land-on-both-sides-of-the-ceiling
+  (let [by-mass (into {} (map (juxt #(get-in % [:input :crush-press-platen-mass-kg]) identity))
+                      (:runs (probe/probe)))]
+    (is (false? (:out-of-tolerance? (get by-mass 80))))
+    (is (true? (:out-of-tolerance? (get by-mass 300))))))
+
+(deftest derived-boundary-straddles-the-ceiling
+  (let [m (probe/max-passing-platen-mass-kg)
+        force (fn [kg] (:sim-peak-crush-force-n
+                        (robotics/crush-telemetry-for {:crush-press-platen-mass-kg kg})))]
+    (is (number? m))
+    (testing "at the boundary the force stays within the ceiling; 1% heavier it exceeds it"
+      (is (<= (force m) robotics/un383-t6-crush-force-ceiling-n))
+      (is (> (force (* 1.01 m)) robotics/un383-t6-crush-force-ceiling-n)))))
+
+(deftest bracket-that-does-not-straddle-answers-nil
+  (is (nil? (probe/max-passing-platen-mass-kg 200.0 1000.0 10))))
