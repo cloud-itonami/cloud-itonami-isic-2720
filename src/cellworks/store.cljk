@@ -37,7 +37,7 @@
   the audit trail a community trusting a battery plant needs, and the
   evidence a plant needs if a shipment or certificate decision is later
   disputed."
-  (:require #?(:clj  [clojure.edn :as edn]
+  (:require #?(:clj  [kotoba.lang.edn :as edn]
                :cljs [cljs.reader :as edn])
             [cellworks.registry :as registry]
             [cellworks.robotics :as robotics]
