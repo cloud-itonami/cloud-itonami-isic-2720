@@ -27,7 +27,7 @@
 
   Usage: `kbb -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
-  (:require [jp-go-dds.skin]
+  (:require [kotoba.io :as kio] [jp-go-dds.skin]
             [kotoba.lang.text :as str]
             [cellworks.governor :as governor]
             [cellworks.operation :as op]
@@ -377,8 +377,8 @@
 (defn -main [& args]
   (let [out (or (first args) "docs/samples/operator-console.html")
         db (run-demo!)
-        f (java.io.File. ^String out)]
-    (some-> (.getParentFile f) .mkdirs)
+        f (kio/file ^String out)]
+    (some-> (kio/parent-file f) kio/mkdirs)
     (spit f (render db))
     (println "wrote" out "("
              (count (store/ledger db)) "ledger facts,"
